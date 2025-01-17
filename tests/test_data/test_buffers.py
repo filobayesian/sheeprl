@@ -34,7 +34,7 @@ def test_replay_buffer_add_single_td_not_full():
     rb.add(td1)
     assert not rb.full
     assert rb._pos == 2
-    assert np.allclose(rb["a"][:2] , td1["a"])
+    assert np.allclose(rb["a"][:2], td1["a"])
 
 
 def test_replay_buffer_add_tds():
@@ -51,7 +51,7 @@ def test_replay_buffer_add_tds():
     assert rb["a"][0] == td3["a"][-2]
     assert rb["a"][1] == td3["a"][-1]
     assert rb._pos == 2
-    assert np.allclose(rb["a"][2:4] , td2["a"])
+    assert np.allclose(rb["a"][2:4], td2["a"])
 
 
 def test_replay_buffer_add_tds_exceeding_buf_size_multiple_times():
@@ -82,6 +82,7 @@ def test_replay_buffer_add_single_td_size_is_not_multiple():
     remainder = len(td1["a"]) % buf_size
     assert np.allclose(rb["a"][:remainder], td1["a"][-remainder:])
     assert np.allclose(rb["a"][remainder:], td1["a"][-buf_size:-remainder])
+
 
 def test_replay_buffer_add_single_td_size_is_multiple():
     buf_size = 5
