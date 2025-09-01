@@ -1,0 +1,21 @@
+defaults:
+  - dreamer_v3.yaml
+
+name: dreamer_v3_jepa
+
+# Disable observation reconstruction
+cnn_keys:
+  decoder: []
+mlp_keys:
+  decoder: []
+
+# JEPA hyperparameters
+jepa_coef: 1.0
+jepa_ema: 0.996
+jepa_proj_dim: 1024
+jepa_hidden: 1024
+jepa_mask:
+  erase_frac: 0.6
+  vec_dropout: 0.2
+
+

@@ -32,6 +32,10 @@ from sheeprl.algos.ppo_recurrent import ppo_recurrent  # noqa: F401
 from sheeprl.algos.sac import sac  # noqa: F401
 from sheeprl.algos.sac import sac_decoupled  # noqa: F401
 from sheeprl.algos.sac_ae import sac_ae  # noqa: F401
+try:
+    from sheeprl.algos.dreamer_v3_jepa import dreamer_v3_jepa  # noqa: F401
+except Exception:
+    pass
 
 from sheeprl.algos.a2c import evaluate as a2c_evaluate  # noqa: F401, isort:skip
 from sheeprl.algos.dreamer_v1 import evaluate as dreamer_v1_evaluate  # noqa: F401, isort:skip
@@ -45,6 +49,10 @@ from sheeprl.algos.ppo import evaluate as ppo_evaluate  # noqa: F401, isort:skip
 from sheeprl.algos.ppo_recurrent import evaluate as ppo_recurrent_evaluate  # noqa: F401, isort:skip
 from sheeprl.algos.sac import evaluate as sac_evaluate  # noqa: F401, isort:skip
 from sheeprl.algos.sac_ae import evaluate as sac_ae_evaluate  # noqa: F401, isort:skip
+try:
+    from sheeprl.algos.dreamer_v3_jepa import evaluate as dreamer_v3_jepa_evaluate  # noqa: F401, isort:skip
+except Exception:
+    pass
 # fmt: on
 
 # Needed because MineRL 0.4.4 is not compatible with the latest version of numpy
