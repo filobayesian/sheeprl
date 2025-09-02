@@ -182,6 +182,16 @@ def _train_step(
     if hasattr(world_model, "jepa"):
         world_model.jepa.update_momentum_from(world_model.jepa)
 
+    # Optional debug prints
+    debug_print = getattr(cfg.algo, "debug_print", False)
+    if debug_print and fabric.is_global_zero:
+        dec_free = (len(cfg.algo.cnn_keys.decoder) == 0) and (len(cfg.algo.mlp_keys.decoder) == 0)
+        fabric.print(
+            f"JEPA step | dec_free={dec_free} | rec_loss={rec_loss.detach().mean().item():.4f} | "
+            f"jepa_loss={jepa_loss.detach().mean().item():.4f} | coef={float(cfg.algo.jepa_coef):.3f} | "
+            f"total_wm_loss={total_wm_loss.detach().mean().item():.4f}"
+        )
+
     # Behaviour learning (unchanged)
     stoch_state_size = stochastic_size * discrete_size
     imagined_prior = posteriors.detach().reshape(1, -1, stoch_state_size)
@@ -280,6 +290,11 @@ def _train_step(
             error_if_nonfinite=False,
         )
     critic_optimizer.step()
+
+    if debug_print and fabric.is_global_zero:
+        fabric.print(
+            f"JEPA step | policy_loss={policy_loss.detach().mean().item():.4f} | value_loss={value_loss.detach().mean().item():.4f}"
+        )
 
     # Metrics
     if aggregator and not aggregator.disabled:
