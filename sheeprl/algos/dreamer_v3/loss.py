@@ -60,7 +60,8 @@ def reconstruction_loss(
     rewards.device
     # Allow empty observation model (e.g., JEPA). Use zero when no decoders are present.
     if len(po) == 0:
-        observation_loss = torch.zeros_like(rewards)
+        # Match the shape of other loss terms ([T, B]) to avoid broadcasting errors
+        observation_loss = torch.zeros_like(rewards.squeeze(-1))
     else:
         observation_loss = -sum([po[k].log_prob(observations[k]) for k in po.keys()])
     reward_loss = -pr.log_prob(rewards)
