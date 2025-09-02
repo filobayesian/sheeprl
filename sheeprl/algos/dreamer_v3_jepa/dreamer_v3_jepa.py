@@ -36,56 +36,7 @@ from sheeprl.utils.timer import timer
 from sheeprl.utils.utils import Ratio, save_configs
 
 
-def build_agent(
-    fabric: Fabric,
-    actions_dim: Sequence[int],
-    is_continuous: bool,
-    cfg: Dict[str, Any],
-    obs_space: gym.spaces.Dict,
-    world_model_state: Optional[Dict[str, Tensor]] = None,
-    actor_state: Optional[Dict[str, Tensor]] = None,
-    critic_state: Optional[Dict[str, Tensor]] = None,
-    target_critic_state: Optional[Dict[str, Tensor]] = None,
-) -> Tuple[WorldModel, _FabricModule, _FabricModule, _FabricModule, PlayerDV3]:
-    """Build agent as Dreamer-V3 and attach a JEPA head to the world model.
-
-    Returns the same tuple as Dreamer-V3 build_agent.
-    """
-    world_model, actor, critic, target_critic, player = _build_dv3_agent(
-        fabric,
-        actions_dim,
-        is_continuous,
-        cfg,
-        obs_space,
-        world_model_state,
-        actor_state,
-        critic_state,
-        target_critic_state,
-    )
-
-    # Attach JEPA head: use the shared encoder and its output dimension
-    # world_model.encoder is a Fabric-wrapped module; access output_dim on the underlying module
-    enc_module = getattr(world_model.encoder, "module", world_model.encoder)
-    enc_out_dim = getattr(enc_module, "output_dim")
-    jepa_head = JEPAHead(
-        online_encoder=world_model.encoder,
-        enc_out_dim=enc_out_dim,
-        proj_dim=cfg.algo.jepa_proj_dim,
-        pred_hidden=cfg.algo.jepa_hidden,
-        ema_m=cfg.algo.jepa_ema,
-    ).to(fabric.device)
-    # Ensure target branch stays EMA-only
-    jepa_head.target_encoder.eval()
-    jepa_head.target_projector.eval()
-    for p in jepa_head.target_encoder.parameters():
-        p.requires_grad = False
-    for p in jepa_head.target_projector.parameters():
-        p.requires_grad = False
-
-    # Register on the world model so its trainable params are optimized
-    world_model.jepa = jepa_head
-
-    return world_model, actor, critic, target_critic, player
+from sheeprl.algos.dreamer_v3_jepa.agent import build_agent
 
 
 def _train_step(
