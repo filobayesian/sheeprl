@@ -58,7 +58,11 @@ def reconstruction_loss(
         reconstruction_loss (Tensor): the value of the overall reconstruction loss.
     """
     rewards.device
-    observation_loss = -sum([po[k].log_prob(observations[k]) for k in po.keys()])
+    # Allow empty observation model (e.g., JEPA). Use zero when no decoders are present.
+    if len(po) == 0:
+        observation_loss = torch.zeros_like(rewards)
+    else:
+        observation_loss = -sum([po[k].log_prob(observations[k]) for k in po.keys()])
     reward_loss = -pr.log_prob(rewards)
     # KL balancing
     dyn_loss = kl = kl_divergence(

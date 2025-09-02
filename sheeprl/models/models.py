@@ -482,8 +482,7 @@ class MultiDecoder(nn.Module):
         mlp_decoder: ModuleType,
     ) -> None:
         super().__init__()
-        if cnn_decoder is None and mlp_decoder is None:
-            raise ValueError("There must be an decoder, both cnn and mlp decoders are None")
+        # Allow decoder-free setups (e.g., JEPA). When both are None, forward() returns an empty dict.
         self.cnn_decoder = cnn_decoder
         self.mlp_decoder = mlp_decoder
 
