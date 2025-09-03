@@ -11,6 +11,8 @@ AGGREGATOR_KEYS = {
     "Loss/state_loss",
     "Loss/continue_loss",
     "State/kl",
+    "State/post_entropy",
+    "State/prior_entropy",
     "Grads/world_model",
     "Grads/actor",
     "Grads/critic",
