@@ -450,16 +450,38 @@ def main(fabric: Fabric, cfg: Dict[str, Any]):
         trainable = sum(p.numel() for p in module.parameters() if p.requires_grad)
         return total, trainable
 
-    if fabric.is_global_zero:
+    def _print_world_model_breakdown(world_model, fabric):
+        """Print detailed breakdown of world model parameters by component"""
+        # World model components
+        enc_total, enc_train = _count_params(world_model.encoder)
+        rssm_total, rssm_train = _count_params(world_model.rssm)
+        obs_total, obs_train = _count_params(world_model.observation_model)
+        rew_total, rew_train = _count_params(world_model.reward_model)
+        cont_total, cont_train = _count_params(world_model.continue_model)
+        
+        # Total world model
         wm_total, wm_train = _count_params(world_model)
+        
+        fabric.print("\n=== WORLD MODEL PARAMETER BREAKDOWN ===")
+        fabric.print(f"  Encoder:           total={enc_total:,} trainable={enc_train:,}")
+        fabric.print(f"  RSSM:              total={rssm_total:,} trainable={rssm_train:,}")
+        fabric.print(f"  Observation Model: total={obs_total:,} trainable={obs_train:,}")
+        fabric.print(f"  Reward Model:      total={rew_total:,} trainable={rew_train:,}")
+        fabric.print(f"  Continue Model:    total={cont_total:,} trainable={cont_train:,}")
+        fabric.print(f"  ----------------------------------------")
+        fabric.print(f"  TOTAL World Model: total={wm_total:,} trainable={wm_train:,}")
+        fabric.print("==========================================\n")
+        
+        return wm_total, wm_train
+
+    if fabric.is_global_zero:
+        wm_total, wm_train = _print_world_model_breakdown(world_model, fabric)
         a_total, a_train = _count_params(actor)
         c_total, c_train = _count_params(critic)
         tc_total, tc_train = _count_params(target_critic)
         fabric.print(
-            f"Params/world_model: total={wm_total:,} trainable={wm_train:,} | "
-            f"actor: total={a_total:,} trainable={a_train:,} | "
-            f"critic: total={c_total:,} trainable={c_train:,} | "
-            f"target_critic: total={tc_total:,} trainable={tc_train:,}"
+            f"Params Summary: world_model={wm_total:,} | "
+            f"actor={a_total:,} | critic={c_total:,} | target_critic={tc_total:,}"
         )
 
     # Optimizers

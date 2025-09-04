@@ -425,20 +425,58 @@ def dreamer_v3_jepa(fabric: Fabric, cfg: Dict[str, Any]):
         trainable = sum(p.numel() for p in module.parameters() if p.requires_grad)
         return total, trainable
 
-    if fabric.is_global_zero:
+    def _print_world_model_breakdown(world_model, fabric):
+        """Print detailed breakdown of world model parameters by component (JEPA version)"""
+        # World model components
+        enc_total, enc_train = _count_params(world_model.encoder)
+        rssm_total, rssm_train = _count_params(world_model.rssm)
+        obs_total, obs_train = _count_params(world_model.observation_model)
+        rew_total, rew_train = _count_params(world_model.reward_model)
+        cont_total, cont_train = _count_params(world_model.continue_model)
+        
+        # JEPA components (if present)
+        jepa_breakdown = ""
+        if hasattr(world_model, "jepa") and world_model.jepa is not None:
+            jepa = world_model.jepa
+            proj_total, proj_train = _count_params(jepa.projector)
+            pred_total, pred_train = _count_params(jepa.predictor)
+            target_enc_total, target_enc_train = _count_params(jepa.target_encoder)
+            target_proj_total, target_proj_train = _count_params(jepa.target_projector)
+            j_total, j_train = _count_params(jepa)
+            
+            jepa_breakdown = f"\n  JEPA Components:"
+            jepa_breakdown += f"\n    Online Projector:  total={proj_total:,} trainable={proj_train:,}"
+            jepa_breakdown += f"\n    Predictor:         total={pred_total:,} trainable={pred_train:,}"
+            jepa_breakdown += f"\n    Target Encoder:    total={target_enc_total:,} trainable={target_enc_train:,}"
+            jepa_breakdown += f"\n    Target Projector:  total={target_proj_total:,} trainable={target_proj_train:,}"
+            jepa_breakdown += f"\n    JEPA Head Total:   total={j_total:,} trainable={j_train:,}"
+        
+        # Total world model (includes JEPA if present)
         wm_total, wm_train = _count_params(world_model)
+        
+        fabric.print("\n=== WORLD MODEL PARAMETER BREAKDOWN (JEPA) ===")
+        fabric.print(f"  Encoder:           total={enc_total:,} trainable={enc_train:,}")
+        fabric.print(f"  RSSM:              total={rssm_total:,} trainable={rssm_train:,}")
+        fabric.print(f"  Observation Model: total={obs_total:,} trainable={obs_train:,}")
+        fabric.print(f"  Reward Model:      total={rew_total:,} trainable={rew_train:,}")
+        fabric.print(f"  Continue Model:    total={cont_total:,} trainable={cont_train:,}")
+        if jepa_breakdown:
+            fabric.print(jepa_breakdown)
+        fabric.print(f"  ----------------------------------------")
+        fabric.print(f"  TOTAL World Model: total={wm_total:,} trainable={wm_train:,}")
+        fabric.print("===============================================\n")
+        
+        return wm_total, wm_train
+
+    if fabric.is_global_zero:
+        wm_total, wm_train = _print_world_model_breakdown(world_model, fabric)
         a_total, a_train = _count_params(actor)
         c_total, c_train = _count_params(critic)
         tc_total, tc_train = _count_params(target_critic)
         fabric.print(
-            f"Params/world_model: total={wm_total:,} trainable={wm_train:,} | "
-            f"actor: total={a_total:,} trainable={a_train:,} | "
-            f"critic: total={c_total:,} trainable={c_train:,} | "
-            f"target_critic: total={tc_total:,} trainable={tc_train:,}"
+            f"Params Summary: world_model={wm_total:,} | "
+            f"actor={a_total:,} | critic={c_total:,} | target_critic={tc_total:,}"
         )
-        if hasattr(world_model, "jepa"):
-            j_total, j_train = _count_params(world_model.jepa)
-            fabric.print(f"Params/jepa_head: total={j_total:,} trainable={j_train:,}")
 
     # Optimizers (JEPA trainable params are included via world_model.parameters())
     world_optimizer = hydra.utils.instantiate(
