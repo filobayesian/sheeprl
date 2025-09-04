@@ -419,6 +419,27 @@ def dreamer_v3_jepa(fabric: Fabric, cfg: Dict[str, Any]):
         state["target_critic"] if cfg.checkpoint.resume_from else None,
     )
 
+    # Print parameter counts before training starts (rank-0 only)
+    def _count_params(module: torch.nn.Module) -> tuple[int, int]:
+        total = sum(p.numel() for p in module.parameters())
+        trainable = sum(p.numel() for p in module.parameters() if p.requires_grad)
+        return total, trainable
+
+    if fabric.is_global_zero:
+        wm_total, wm_train = _count_params(world_model)
+        a_total, a_train = _count_params(actor)
+        c_total, c_train = _count_params(critic)
+        tc_total, tc_train = _count_params(target_critic)
+        fabric.print(
+            f"Params/world_model: total={wm_total:,} trainable={wm_train:,} | "
+            f"actor: total={a_total:,} trainable={a_train:,} | "
+            f"critic: total={c_total:,} trainable={c_train:,} | "
+            f"target_critic: total={tc_total:,} trainable={tc_train:,}"
+        )
+        if hasattr(world_model, "jepa"):
+            j_total, j_train = _count_params(world_model.jepa)
+            fabric.print(f"Params/jepa_head: total={j_total:,} trainable={j_train:,}")
+
     # Optimizers (JEPA trainable params are included via world_model.parameters())
     world_optimizer = hydra.utils.instantiate(
         cfg.algo.world_model.optimizer, params=world_model.parameters(), _convert_="all"
