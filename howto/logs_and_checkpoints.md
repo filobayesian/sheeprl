@@ -37,7 +37,7 @@ aggregator:
 ```
 where 
 
-* `logger` is the configuration of the logger you want to use for logging. There are two possible values: `tensorboard` (default) and `mlflow`, but one can define and choose its own logger.
+* `logger` is the configuration of the logger you want to use for logging. There are three possible values: `wandb` (default), `tensorboard`, and `mlflow`, but one can define and choose its own logger.
 * `log_every` is the number of policy steps (number of steps played in the environment, e.g. if one has 2 processes with 4 environments per process then the policy steps are 2*4=8) between two consecutive logging operations. For more info about the policy steps, check the [Work with Steps Tutorial](./work_with_steps.md).
 * `disable_timer` is a boolean flag that enables/disables the timer to measure both the time spent in the environment and the time spent during the agent training. The timer class used can be found [here](../sheeprl/utils/timer.py).
 * `log_level` is the level of logging: $0$ means no log (it disables also the timer), whereas $1$ means logging everything.
@@ -47,11 +47,40 @@ where
 So, if one wants to disable everything related to logging, he/she can set `log_level` to $0$ if one wants to disable the timer, he/she can set `disable_timer` to `True`.
 
 ### Loggers
-Two loggers are made available: the Tensorboard logger and the MLFlow one. In any case, it is possible to define or choose another logger.
+Three loggers are made available: the Weights & Biases (wandb) logger (default), the Tensorboard logger, and the MLFlow one. In any case, it is possible to define or choose another logger.
 The configurations of the loggers are under the `./sheeprl/configs/logger/` folder.
 
+#### Weights & Biases (wandb)
+The wandb logger is the default logger used in SheepRL. It provides comprehensive experiment tracking, visualization, and collaboration features.
+
+```yaml
+# ./sheeprl/configs/logger/wandb.yaml
+
+# For more information, check https://lightning.ai/docs/pytorch/stable/api/generated/lightning.pytorch.loggers.WandbLogger.html
+_target_: lightning.pytorch.loggers.WandbLogger
+project: ${exp_name}
+name: ${run_name}
+save_dir: logs/runs/${root_dir}
+version: null
+log_model: false
+prefix: ""
+group: null
+tags: null
+notes: null
+offline: false
+id: null
+resume: allow
+reinit: false
+```
+
+The wandb logger automatically logs metrics, hyperparameters, and system information to the Weights & Biases platform. The `project` parameter is set to the experiment name, and the `name` parameter is set to the run name for easy identification. The `save_dir` is set to maintain consistency with other loggers.
+
+> [!NOTE]
+>
+> To use wandb, you need to have a wandb account and be logged in. You can log in by running `wandb login` in your terminal. The wandb logger will automatically create a project with the experiment name if it doesn't exist.
+
 #### Tensorboard
-Let us start with the Tensorboard logger, which is the default logger used in SheepRL.
+The Tensorboard logger provides local visualization of training metrics and can be used as an alternative to wandb.
 
 ```yaml
 # ./sheeprl/configs/logger/tensorboard.yaml

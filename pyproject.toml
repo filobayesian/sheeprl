@@ -39,7 +39,8 @@ dependencies = [
   "rich==13.5.*",
   "opencv-python==4.8.0.*",
   "torch>=2.0,!=2.2.0",
-  "numpy<2.0"
+  "numpy<2.0",
+  "wandb>=0.15.0"
 ]
 dynamic = ["version"]
 

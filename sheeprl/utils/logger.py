@@ -32,6 +32,31 @@ def get_logger(fabric: Fabric, cfg: Dict[str, Any]) -> Optional[Logger]:
                 )
             cfg.metric.logger.root_dir = root_dir
             cfg.metric.logger.name = cfg.run_name
+        elif "wandb" in cfg.metric.logger._target_.lower():
+            # For wandb logger, set project and name from config
+            if hasattr(cfg.metric.logger, 'project') and cfg.exp_name != cfg.metric.logger.project:
+                warnings.warn(
+                    "The specified project for the WandbLogger is different from the experiment name, "
+                    "so the logger one will be ignored and replaced with the experiment name",
+                    UserWarning,
+                )
+                cfg.metric.logger.project = cfg.exp_name
+            if hasattr(cfg.metric.logger, 'name') and cfg.run_name != cfg.metric.logger.name:
+                warnings.warn(
+                    "The specified name for the WandbLogger is different from the `run_name` of the experiment, "
+                    "so the logger one will be ignored and replaced with the experiment `run_name`",
+                    UserWarning,
+                )
+                cfg.metric.logger.name = cfg.run_name
+            # Set save_dir to maintain consistency with other loggers
+            save_dir = os.path.join("logs", "runs", cfg.root_dir)
+            if hasattr(cfg.metric.logger, 'save_dir') and save_dir != cfg.metric.logger.save_dir:
+                warnings.warn(
+                    "The specified save_dir for the WandbLogger is different from the experiment one, "
+                    "so the logger one will be ignored and replaced with the experiment save directory",
+                    UserWarning,
+                )
+                cfg.metric.logger.save_dir = save_dir
         logger = hydra.utils.instantiate(cfg.metric.logger, _convert_="all")
     return logger
 
