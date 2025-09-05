@@ -1,0 +1,22 @@
+[
+  {
+    "rank": 1,
+    "trial_id": 0,
+    "best_eval_return": -Infinity,
+    "params": {
+      "jepa_coef": 1.0,
+      "jepa_ema": 0.992,
+      "jepa_erase_frac": 0.6
+    }
+  },
+  {
+    "rank": 2,
+    "trial_id": 1,
+    "best_eval_return": -Infinity,
+    "params": {
+      "jepa_coef": 1.0,
+      "jepa_ema": 0.996,
+      "jepa_erase_frac": 0.4
+    }
+  }
+]

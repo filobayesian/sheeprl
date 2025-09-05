@@ -1,0 +1,3 @@
+trial_id,state,seed,env,max_steps,jepa_coef,jepa_ema,erase_frac,vec_dropout,jepa_proj_dim,jepa_hidden,best_eval_return,best_step,wall_time_s,notes
+0,COMPLETE,42,dmc,2000,1.0,0.992,0.6,0.2,1024,1024,-inf,0,0,1
+1,COMPLETE,43,dmc,2000,1.0,0.996,0.4,0.2,1024,1024,-inf,0,0,1

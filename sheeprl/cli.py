@@ -1,4 +1,4 @@
-import importlib
+cancan import importlib
 import os
 import pathlib
 import warnings

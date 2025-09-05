@@ -1,0 +1,13 @@
+algo:
+  name: dreamer_v3_jepa
+  jepa_coef: 1.0
+  jepa_ema: 0.992
+  jepa_mask:
+    erase_frac: 0.6
+    vec_dropout: 0.2
+  jepa_proj_dim: 1024
+  jepa_hidden: 1024
+env:
+  id: dmc
+seed: 42
+best_eval_return: -.inf
