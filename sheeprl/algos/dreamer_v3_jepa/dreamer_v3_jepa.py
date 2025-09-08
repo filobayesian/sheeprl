@@ -45,7 +45,7 @@ def _save_jepa_video_comparison(
     original: Dict[str, Tensor], 
     obs_q: Dict[str, Tensor], 
     obs_k: Dict[str, Tensor], 
-    cfg: Dict[str, Any],
+    cfg: Any,
     max_frames: int = 50
 ) -> None:
     """Save a video comparison of original vs masked observations for JEPA debugging."""
@@ -138,8 +138,7 @@ def _train_step(
     save_video_comparison = getattr(cfg.algo, "save_video_comparison", False)
     current_step = getattr(cfg, "current_step", 0)
     if save_video_comparison and fabric.is_global_zero and current_step % 1000 == 0:
-        cfg_with_step = {**cfg, "current_step": current_step}
-        _save_jepa_video_comparison(batch_obs, obs_q, obs_k, cfg_with_step)
+        _save_jepa_video_comparison(batch_obs, obs_q, obs_k, cfg)
 
     # Dynamic learning
     stoch_state_size = stochastic_size * discrete_size
@@ -809,7 +808,8 @@ def dreamer_v3_jepa(fabric: Fabric, cfg: Dict[str, Any]):
                                 tcp.data.copy_(tau * cp.data + (1 - tau) * tcp.data)
                         batch = {k: v[i].float() for k, v in local_data.items()}
                         # Add current step and log dir for video comparison
-                        cfg_with_step = {**cfg, "current_step": policy_step, "log_dir": log_dir}
+                        cfg.current_step = policy_step
+                        cfg.log_dir = log_dir
                         _train_step(
                             fabric,
                             world_model,
@@ -821,7 +821,7 @@ def dreamer_v3_jepa(fabric: Fabric, cfg: Dict[str, Any]):
                             critic_optimizer,
                             batch,
                             aggregator,
-                            cfg_with_step,
+                            cfg,
                             is_continuous,
                             actions_dim,
                             moments,
