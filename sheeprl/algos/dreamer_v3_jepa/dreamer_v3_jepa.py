@@ -24,6 +24,8 @@ from sheeprl.algos.dreamer_v3.utils import Moments, compute_lambda_values, prepa
 from sheeprl.data.buffers import EnvIndependentReplayBuffer, SequentialReplayBuffer
 from sheeprl.envs.wrappers import RestartOnException
 from sheeprl.models.jepa import JEPAHead, make_two_views
+import cv2
+import os
 from sheeprl.utils.distribution import (
     BernoulliSafeMode,
     TwoHotEncodingDistribution,
@@ -37,6 +39,61 @@ from sheeprl.utils.utils import Ratio, save_configs
 
 
 from sheeprl.algos.dreamer_v3_jepa.agent import build_agent
+
+
+def _save_jepa_video_comparison(
+    original: Dict[str, Tensor], 
+    obs_q: Dict[str, Tensor], 
+    obs_k: Dict[str, Tensor], 
+    cfg: Dict[str, Any],
+    max_frames: int = 50
+) -> None:
+    """Save a video comparison of original vs masked observations for JEPA debugging."""
+    
+    # Only save RGB observations
+    if 'rgb' not in original:
+        return
+        
+    # Get the log directory - use the same pattern as main training
+    log_dir = getattr(cfg, 'log_dir', None)
+    if log_dir is None:
+        log_dir = os.path.join('logs', 'runs', cfg.root_dir, cfg.run_name)
+    video_dir = os.path.join(log_dir, 'jepa_video_comparison')
+    os.makedirs(video_dir, exist_ok=True)
+    
+    # Convert tensors to numpy and denormalize (from [-0.5, 0.5] to [0, 255])
+    orig_frames = ((original['rgb'] + 0.5) * 255).clamp(0, 255).byte().cpu().numpy()  # [T, B, C, H, W]
+    q_frames = ((obs_q['rgb'] + 0.5) * 255).clamp(0, 255).byte().cpu().numpy()
+    k_frames = ((obs_k['rgb'] + 0.5) * 255).clamp(0, 255).byte().cpu().numpy()
+    
+    T, B, C, H, W = orig_frames.shape
+    T = min(T, max_frames)  # Limit frames to avoid huge videos
+    
+    # Take first environment only
+    orig_frames = orig_frames[:T, 0].transpose(0, 2, 3, 1)  # [T, H, W, C]
+    q_frames = q_frames[:T, 0].transpose(0, 2, 3, 1)
+    k_frames = k_frames[:T, 0].transpose(0, 2, 3, 1)
+    
+    # Create side-by-side comparison: original | masked_q | masked_k
+    comparison_frames = []
+    for t in range(T):
+        # Concatenate horizontally: orig | q | k
+        combined = np.concatenate([orig_frames[t], q_frames[t], k_frames[t]], axis=1)  # [H, 3*W, C]
+        comparison_frames.append(combined)
+    
+    # Save as video using cv2
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    video_path = os.path.join(video_dir, f'jepa_comparison_step_{getattr(cfg, "current_step", 0):06d}.mp4')
+    
+    out = cv2.VideoWriter(video_path, fourcc, 10.0, (3 * W, H))
+    
+    for frame in comparison_frames:
+        # Convert RGB to BGR for cv2
+        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        out.write(frame_bgr)
+    
+    out.release()
+    print(f"JEPA video comparison saved to: {video_path}")
 
 
 def _train_step(
@@ -76,6 +133,13 @@ def _train_step(
         erase_frac = float(cfg.algo.jepa_mask.erase_frac)
         vec_dropout = float(cfg.algo.jepa_mask.vec_dropout)
     obs_q, obs_k = make_two_views(batch_obs, erase_frac=erase_frac, vec_dropout=vec_dropout)
+    
+    # Save video comparison if enabled (only occasionally to avoid spam)
+    save_video_comparison = getattr(cfg.algo, "save_video_comparison", False)
+    current_step = getattr(cfg, "current_step", 0)
+    if save_video_comparison and fabric.is_global_zero and current_step % 1000 == 0:
+        cfg_with_step = {**cfg, "current_step": current_step}
+        _save_jepa_video_comparison(batch_obs, obs_q, obs_k, cfg_with_step)
 
     # Dynamic learning
     stoch_state_size = stochastic_size * discrete_size
@@ -186,8 +250,37 @@ def _train_step(
     debug_print = getattr(cfg.algo, "debug_print", False)
     if debug_print and fabric.is_global_zero:
         dec_free = (len(cfg.algo.cnn_keys.decoder) == 0) and (len(cfg.algo.mlp_keys.decoder) == 0)
+        
+        # Check JEPA head exists and shapes
+        has_jepa = hasattr(world_model, "jepa")
+        if has_jepa:
+            fabric.print(f"JEPA DEBUG | JEPA head found: {has_jepa}")
+            fabric.print(f"JEPA DEBUG | obs_q keys: {list(obs_q.keys())}, obs_k keys: {list(obs_k.keys())}")
+            for k in obs_q.keys():
+                fabric.print(f"JEPA DEBUG | obs_q[{k}] shape: {obs_q[k].shape}, obs_k[{k}] shape: {obs_k[k].shape}")
+            
+            # Check encoder output
+            embedded_q = world_model.encoder(obs_q)
+            embedded_k = world_model.jepa.target_encoder(obs_k)
+            fabric.print(f"JEPA DEBUG | embedded_q shape: {embedded_q.shape}, embedded_k shape: {embedded_k.shape}")
+            
+            # Check projector outputs
+            proj_q = world_model.jepa.projector(embedded_q)
+            proj_k = world_model.jepa.target_projector(embedded_k)
+            fabric.print(f"JEPA DEBUG | proj_q shape: {proj_q.shape}, proj_k shape: {proj_k.shape}")
+            
+            # Check predictor
+            pred_q = world_model.jepa.predictor(proj_q)
+            fabric.print(f"JEPA DEBUG | pred_q shape: {pred_q.shape}")
+            
+            # Check gradients on JEPA components
+            jepa_proj_grad = any(p.grad is not None for p in world_model.jepa.projector.parameters())
+            jepa_pred_grad = any(p.grad is not None for p in world_model.jepa.predictor.parameters())
+            target_proj_grad = any(p.grad is not None for p in world_model.jepa.target_projector.parameters())
+            fabric.print(f"JEPA DEBUG | projector has grad: {jepa_proj_grad}, predictor has grad: {jepa_pred_grad}, target_proj has grad: {target_proj_grad}")
+        
         fabric.print(
-            f"JEPA step | dec_free={dec_free} | rec_loss={rec_loss.detach().mean().item():.4f} | "
+            f"JEPA LOSS | dec_free={dec_free} | rec_loss={rec_loss.detach().mean().item():.4f} | "
             f"jepa_loss={jepa_loss.detach().mean().item():.4f} | coef={float(cfg.algo.jepa_coef):.3f} | "
             f"total_wm_loss={total_wm_loss.detach().mean().item():.4f}"
         )
@@ -292,8 +385,19 @@ def _train_step(
     critic_optimizer.step()
 
     if debug_print and fabric.is_global_zero:
+        # Check actor/critic shapes and gradients
+        fabric.print(f"ACTOR/CRITIC DEBUG | imagined_trajectories shape: {imagined_trajectories.shape}")
+        fabric.print(f"ACTOR/CRITIC DEBUG | imagined_actions shape: {imagined_actions.shape}")
+        fabric.print(f"ACTOR/CRITIC DEBUG | predicted_values shape: {predicted_values.shape}")
+        fabric.print(f"ACTOR/CRITIC DEBUG | lambda_values shape: {lambda_values.shape}")
+        
+        # Check if actor/critic have gradients
+        actor_has_grad = any(p.grad is not None for p in actor.parameters())
+        critic_has_grad = any(p.grad is not None for p in critic.parameters())
+        fabric.print(f"ACTOR/CRITIC DEBUG | actor has grad: {actor_has_grad}, critic has grad: {critic_has_grad}")
+        
         fabric.print(
-            f"JEPA step | policy_loss={policy_loss.detach().mean().item():.4f} | value_loss={value_loss.detach().mean().item():.4f}"
+            f"ACTOR/CRITIC LOSS | policy_loss={policy_loss.detach().mean().item():.4f} | value_loss={value_loss.detach().mean().item():.4f}"
         )
 
     # Metrics
@@ -704,6 +808,8 @@ def dreamer_v3_jepa(fabric: Fabric, cfg: Dict[str, Any]):
                             for cp, tcp in zip(critic.module.parameters(), target_critic.parameters()):
                                 tcp.data.copy_(tau * cp.data + (1 - tau) * tcp.data)
                         batch = {k: v[i].float() for k, v in local_data.items()}
+                        # Add current step and log dir for video comparison
+                        cfg_with_step = {**cfg, "current_step": policy_step, "log_dir": log_dir}
                         _train_step(
                             fabric,
                             world_model,
@@ -715,7 +821,7 @@ def dreamer_v3_jepa(fabric: Fabric, cfg: Dict[str, Any]):
                             critic_optimizer,
                             batch,
                             aggregator,
-                            cfg,
+                            cfg_with_step,
                             is_continuous,
                             actions_dim,
                             moments,
